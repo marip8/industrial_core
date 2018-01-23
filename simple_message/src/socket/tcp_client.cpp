@@ -53,50 +53,26 @@ TcpClient::~TcpClient()
 
 bool TcpClient::init(char *buff, int port_num)
 {
-
-  int rc;
-  bool rtn;
-  int disableNodeDelay = 1;
   struct hostent *ent;
   struct in_addr *in_a;
 
-  rc = SOCKET(AF_INET, SOCK_STREAM, 0);
-  if (this->SOCKET_FAIL != rc)
+  // Initialize address data structure
+  memset(&this->sockaddr_, 0, sizeof(this->sockaddr_));
+  this->sockaddr_.sin_family = AF_INET;
+
+  // Check for 'buff' as hostname, and use that, otherwise assume IP address
+  if (NULL != (ent = GETHOSTBYNAME(buff)))
   {
-    this->setSockHandle(rc);
-
-    // The set no delay disables the NAGEL algorithm
-    rc = SET_NO_DELAY(this->getSockHandle(), disableNodeDelay);
-    if (this->SOCKET_FAIL == rc)
-    {
-      LOG_WARN("Failed to set no socket delay, sending data can be delayed by up to 250ms");
-    }
-
-    // Initialize address data structure
-    memset(&this->sockaddr_, 0, sizeof(this->sockaddr_));
-    this->sockaddr_.sin_family = AF_INET;
-
-    // Check for 'buff' as hostname, and use that, otherwise assume IP address
-    if (NULL != (ent = GETHOSTBYNAME(buff)))
-    {
-      in_a = (struct in_addr *) ent->h_addr_list[0];
-      this->sockaddr_.sin_addr.s_addr = in_a->s_addr;
-    }
-    else 
-    {
-      this->sockaddr_.sin_addr.s_addr = INET_ADDR(buff);
-    }
-    this->sockaddr_.sin_port = HTONS(port_num);
-
-    rtn = true;
-
+    in_a = (struct in_addr *) ent->h_addr_list[0];
+    this->sockaddr_.sin_addr.s_addr = in_a->s_addr;
   }
   else
   {
-    LOG_ERROR("Failed to create socket, rc: %d", rc);
-    rtn = false;
+    this->sockaddr_.sin_addr.s_addr = INET_ADDR(buff);
   }
-  return rtn;
+  this->sockaddr_.sin_port = HTONS(port_num);
+
+  return true;
 }
 
 bool TcpClient::makeConnect()
@@ -107,28 +83,55 @@ bool TcpClient::makeConnect()
 
   if (!this->isConnected())
   {
-    addrSize = sizeof(this->sockaddr_);
-    rc = CONNECT(this->getSockHandle(), (sockaddr *)&this->sockaddr_, addrSize);
-    if (this->SOCKET_FAIL != rc)
+    int sock = makeSocket();
+    if (sock != SOCKET_FAIL) // If we already had a socket descriptor, make sure we cleanup
     {
-      LOG_INFO("Connected to server");
-      this->setConnected(true);
-      rtn = true;
+      if (this->getSockHandle() != SOCKET_FAIL)
+      {
+        disconnect();
+      }
+
+      this->setSockHandle(sock);
+      addrSize = sizeof(this->sockaddr_);
+      rc = CONNECT(this->getSockHandle(), (sockaddr *)&this->sockaddr_, addrSize);
+      if (this->SOCKET_FAIL != rc)
+      {
+        this->setConnected(true);
+        rtn = true;
+      }
+      else
+      {
+        this->logSocketError("Failed to connect to server", rc, errno);
+      }
     }
     else
     {
-      this->logSocketError("Failed to connect to server", rc, errno);
-      rtn = false;
+      LOG_WARN("Failed to create new TCP socket");
     }
   }
-
   else
   {
     LOG_WARN("Tried to connect when socket already in connected state");
   }
 
   return rtn;
+}
 
+int TcpClient::makeSocket()
+{
+  int disableNodeDelay = 1;
+  int fd = SOCKET(AF_INET, SOCK_STREAM, 0);
+  if (this->SOCKET_FAIL != fd)
+  {
+    // The set no delay disables the NAGEL algorithm
+    int rc = SET_NO_DELAY(fd, disableNodeDelay);
+    if (this->SOCKET_FAIL == rc)
+    {
+      LOG_WARN("Failed to set no socket delay, sending data can be delayed by up to 250ms");
+    }
+  }
+
+  return fd;
 }
 
 } //tcp_client

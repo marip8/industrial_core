@@ -65,6 +65,8 @@ public:
   TcpSocket();
   virtual ~TcpSocket();
 
+  virtual void disconnect();
+
 private:
 
   // Virtual
@@ -74,7 +76,6 @@ private:
       industrial::shared_types::shared_int num_bytes);
   bool rawPoll(int timeout, bool & ready, bool & error);
 
-  virtual void disconnect();
 
 };
 
