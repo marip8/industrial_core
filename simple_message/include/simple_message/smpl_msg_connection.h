@@ -111,6 +111,8 @@ public:
    */
   virtual bool makeConnect()=0;
 
+  virtual void disconnect() {}
+
 private:
 
   // Overrides

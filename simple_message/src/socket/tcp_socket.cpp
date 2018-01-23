@@ -126,6 +126,13 @@ bool TcpSocket::rawPoll(int timeout, bool & ready, bool & error)
   return rtn;
 }
 
+void TcpSocket::disconnect()
+{
+  const int sock = this->getSockHandle();
+  LOG_INFO("Closing socket (%d)", sock);
+  CLOSE(sock);
+}
+
 } //tcp_socket
 } //industrial
 

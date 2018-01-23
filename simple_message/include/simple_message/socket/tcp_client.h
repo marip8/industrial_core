@@ -76,6 +76,13 @@ public:
     // Overrides
     bool makeConnect();
 
+protected:
+
+   /**
+     * \brief Asks the OS for a socket & attempts to disable Nagle algorithm
+     * \return SOCKET_FAIL if unsuccessful. Otherwise returns the descriptor.
+     */
+    int makeSocket();
 
 };
 
