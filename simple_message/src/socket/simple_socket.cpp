@@ -108,6 +108,9 @@ namespace industrial
 
       memset(&this->buffer_, 0, sizeof(this->buffer_));
 
+      const static int max_retries = 2;
+      int retries = 0;
+
       // Doing a sanity check to determine if the byte array buffer is smaller than
       // what can be received by the socket.
       if (this->MAX_BUFFER_SIZE > buffer.getMaxBufferSize())
@@ -166,7 +169,16 @@ namespace industrial
           }
           else
           {
-            LOG_COMM("Socket poll timeout, trying again");
+            if (++retries > max_retries)
+            {
+              LOG_ERROR("Max retries reached");
+              rtn = false;
+              break;
+            }
+            else
+            {
+              LOG_COMM("Socket poll timeout, trying again");
+            }
           }
         }
       }
