@@ -45,6 +45,7 @@ else:
 from sensor_msgs.msg import JointState
 from control_msgs.msg import FollowJointTrajectoryFeedback
 from industrial_msgs.msg import RobotStatus
+from std_msgs.msg import Int16
 
 # Subscribe
 from trajectory_msgs.msg import JointTrajectory
@@ -97,6 +98,9 @@ class MotionControllerSimulator():
         self.motion_thread = threading.Thread(target=self._motion_worker)
         self.motion_thread.daemon = True
         self.motion_thread.start()
+
+        # Current trajectory size
+        self.trajectory_length = 0
 
 
     """
@@ -170,6 +174,11 @@ class MotionControllerSimulator():
         with self.lock:
             last_goal_point.positions = self.joint_positions[:]
 
+
+        # Create a publisher for the current trajectory index
+        pub = rospy.Publisher('/current_index', Int16, queue_size=1)
+
+
         while not self.sig_shutdown:
             try:
                 current_goal_point = self.motion_buffer.get()
@@ -191,6 +200,13 @@ class MotionControllerSimulator():
 
                 self._move_to(current_goal_point, move_duration)
                 last_goal_point = copy.deepcopy(current_goal_point)
+
+
+                # Publish the current trajectory index
+                msg = Int16()
+                msg.data = self.trajectory_length - (self.motion_buffer.qsize() + 1)
+                pub.publish(msg)
+
 
             except Exception as e:
                 rospy.logerr('Unexpected exception: %s', e)
@@ -375,9 +391,11 @@ class IndustrialRobotSimulatorNode():
                 self.motion_ctrl.stop()
 
             else:
-                for point in msg_in.points:
-                    point = self._to_controller_order(msg_in.joint_names, point)
-                    self.motion_ctrl.add_motion_waypoint(point)
+                with self.motion_ctrl.lock:
+                    self.motion_ctrl.trajectory_length = len(msg_in.points)
+                    for point in msg_in.points:
+                        point = self._to_controller_order(msg_in.joint_names, point)
+                        self.motion_ctrl.add_motion_waypoint(point)
 
         except Exception as e:
             rospy.logerr('Unexpected exception: %s', e)
